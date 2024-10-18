@@ -5,7 +5,7 @@ rm(list = ls())
 # Tables will be output to a folder called "Tabs"
 
 library(statar)
-library(doStata)
+#library(doStata)
 library(tidyverse)
 library(stargazer)
 library(scales)
@@ -19,7 +19,7 @@ df<-df_original%>%mutate(issue = ifelse(issue=="GMO","GMO Ban",issue),
                          issue = ifelse(issue=="RC","Rent Control",issue),
                          issue = ifelse(issue=="NEP","Needle Exchange",issue),
                          issue = factor(issue,levels = c("Needle Exchange","GMO Ban","Rent Control")),
-                         preference_bin = ifelse(preference>0.5,1,0),
+                         preference_bin = ifelse(preference>0.5,1,0), # why .5?
                          policy_bin = ifelse(preference>0.5,1,0),
                          preference_3 = ifelse(preference>0.5,1,0),
                          preference_3 = ifelse(preference==0.5,0.5,preference_3),
@@ -29,9 +29,9 @@ df<-df_original%>%mutate(issue = ifelse(issue=="GMO","GMO Ban",issue),
                          accuracy_3 = ifelse(accuracy==0.5,0.5,accuracy_3),
                          accuracy_3 = ifelse(accuracy<0.5,0,accuracy_3),
                          gender=  ifelse(female==1,"Women","Men"),
-                         age_bin=  cut(age, breaks= quantile(age,probs = seq(0,1,1/2),na.rm = T),
+                         age_bin=  cut(age, breaks= quantile(age,probs = seq(0,1,1/2),na.rm = T), # incorrect handling of NAs
                                        labels=c("Younger","Older")),
-                         exp_bin=  cut(gov_exp, breaks= quantile(gov_exp,probs = seq(0,1,1/2),na.rm = T),
+                         exp_bin=  cut(gov_exp, breaks= quantile(gov_exp,probs = seq(0,1,1/2),na.rm = T), # NAs?
                                        labels=c("Less experience","More experience")),
                          polarization = republican_alignment -democrat_alignment,
                          moderate = ifelse(ideo5=="Moderate, middle of the road",1,0),
@@ -83,7 +83,11 @@ df$preference_response_bin = ifelse(df$preference_posterior>0.5&df$preference>0.
 df$preference_response_bin = ifelse(df$preference_posterior<0.51&df$preference<0.51,0,df$preference_response_bin)
 df$preference_response_bin = ifelse(df$preference_posterior<0.51&df$preference>0.51,0,df$preference_response_bin)
 
-df$bias_num <- ifelse(df$bias == "Unbiased",1,0)
+#df$bias_num <- ifelse(df$bias == "Unbiased",1,0) # error: no column called bias -- do they mean partisen bias?
+# Rename partisan_bias as bias and retry?
+df <- df %>% rename(bias_num = partisan_bias)
+
+#df$bias_num <- ifelse(df$bias == "Unbiased",1,0) # after renaming bias column 
 
 df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Extremely important","1",df[,"decision_factors_decision_factors_experts"])
 df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Very important","0.75",df[,"decision_factors_decision_factors_experts"])
@@ -124,7 +128,7 @@ results <- df %>%
 results$se = results$sd/sqrt(results$n)
 results$ci = results$se*1.96
 
-ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
+x<- ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   geom_bar(width = 0.5, position='dodge', stat='identity')+
   geom_errorbar(aes(ymin=mean - ci,ymax=mean + ci), width=0.15, colour="gray48", position = position_dodge(width = 0.5)) +
   scale_fill_manual(values = c("firebrick","cornflowerblue"),guide=guide_legend(title=NULL))+
@@ -136,8 +140,9 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   scale_y_continuous(labels = percent) +
   scale_x_discrete(labels = c("Support\nNeedle Exchange","Oppose\nGMO Ban","Oppose\nRent Control"))+
   theme(legend.position = "right") + 
-  theme_minimal()+
-  ggsave("Figs/fig_pref_control.png", unit = "in",width=7.5, height=5,dpi = 600)
+  theme_minimal()
+
+ggsave("Figs/fig_pref_control.png", plot = x,unit = "in",width=7.5, height=5,dpi = 600)
 
 
 
@@ -185,16 +190,17 @@ beliefs = plot_grid(fig_effect(reg1b,range,"Δ Accuracy","Belief about Experts",
                     fig_effect(reg2b,range,"Δ Accuracy","Belief about Experts","GMO Ban"),
                     fig_effect(reg3b,range,"Δ Accuracy","Belief about Experts","Rent Control"),ncol=1)
 
-preference = plot_grid(fig_effect(reg1b,range,"Δ Congruence","Policy Preference","Needle Exchange"),
-                       fig_effect(reg2b,range,"Δ Congruence","Policy Preference","GMO Ban"),
-                       fig_effect(reg3b,range,"Δ Congruence","Policy Preference","Rent Control"),ncol=1)
+preference = plot_grid(fig_effect(reg1p,range,"Δ Congruence","Policy Preference","Needle Exchange"),
+                       fig_effect(reg2p,range,"Δ Congruence","Policy Preference","GMO Ban"),
+                       fig_effect(reg3p,range,"Δ Congruence","Policy Preference","Rent Control"),ncol=1)
 
 
 p <- plot_grid(beliefs,preference,ncol=2,rel_widths  = c(1,1))
 
 
-plot_grid(p) + ggsave("Figs/fig_effects.png", 
-                      unit = "in",width=7.5, height=6.5)
+plot_grid(p) 
+
+ggsave("Figs/fig_effects.png", unit = "in",width=7.5, height=6.5) # error: just had to split it to separate line
 
 #### fig_effects_by_party [Fig 3] #####
 range <- c(-.09,.25)
@@ -228,7 +234,7 @@ fig_effects_by_party = function(reg,range,ylabel,subtitle,maintitle){
     scale_y_continuous(breaks = c(-0.05,0, 0.05,0.1,0.15,0.2),limits = range,
                        labels = c("","0%-pts","","10%-pts","","20%-pts"))+
     scale_colour_manual(values = results$colour)+
-    theme(legend.position = "none",axis.title.x = element_blank(),
+    theme(axis.title.x = element_blank(),
           plot.subtitle = element_text(face = "plain",size=9,hjust = 0.5),
           axis.title.y = element_text(size=8),
           axis.text.y = element_text(size=8),
@@ -256,8 +262,12 @@ legend <- get_legend(fig_effects_by_party(reg2p,range,"","Policy Preferences","G
                        theme(legend.text = element_text(margin = margin(r = 10, l =  10, unit = "pt"))))
 
 
-plot_grid(p,legend,nrow=2,rel_heights = c(7,1)) + ggsave("Figs/fig_effects_by_party.png", 
-                                                         unit = "in",width=7.5, height=6.5)
+plot_grid(p,legend,nrow=2,rel_heights = c(7,1))
+
+
+# fig 3 legend not rendering 
+
+ggsave("Figs/fig_effects_by_party.png", unit = "in",width=7.5, height=6.5) # same error, ggplot_add 
 dev.off()
 
 #### fig_updating_by_prior [Fig 4] #####
@@ -266,7 +276,8 @@ fig_belief_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle){
   vcov = vcov(reg)
   results = as.data.frame(matrix(,3,3))
   colnames(results) = c("mean","se","ci")
-  results$accuracy_3_level = factor(levels(df$accuracy_3_level),levels = levels(df$accuracy_3_level))
+  results$accuracy_3_level = factor(c("Least\nAccurate", "Somewhat\nAccurate", "Most\nAccurate"),
+                                    levels = c("Somewhat\nAccurate", "Least\nAccurate", "Most\nAccurate")) # explicitly recode the levels 
   results[,"mean"] <- coeffs[,"Estimate"]
   results[,"se"] <- coeffs[,"Std. Error"]
   results$ci <- results$se * 1.96
@@ -295,7 +306,8 @@ fig_preference_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle)
   vcov = vcov(reg)
   results = as.data.frame(matrix(,3,3))
   colnames(results) = c("mean","se","ci")
-  results$preference_3_level = factor(levels(df$preference_3_level),levels = levels(df$preference_3_level))
+  results$preference_3_level = factor(c("Least\nAccurate", "Somewhat\nAccurate", "Most\nAccurate"),
+                                      levels = c("Somewhat\nAccurate", "Least\nAccurate", "Most\nAccurate")) # explicitly recode the levels
   results[,"mean"] <- coeffs[,"Estimate"]
   results[,"se"] <- coeffs[,"Std. Error"]
   results$ci <- results$se * 1.96
@@ -339,10 +351,11 @@ prefs = plot_grid(fig_preference_updating_by_prior(reg1p,range_p,"Δ Congruence"
 
 p <- plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
 
-plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))+ 
-  ggsave("Figs/fig_updating_by_prior.png",unit = "in",width=7.5, height=6)
-dev.off()
+plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
 
+ggsave("Figs/fig_updating_by_prior.png",unit = "in",width=7.5, height=6) # again ggplot_add error
+dev.off()
+# error: the x axis labels dont match up to OG fig
 
 ### DESCRIPTIVES BY POLICIES
 ## fig_bias ####
@@ -372,8 +385,9 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   scale_y_continuous(labels = percent) +
   scale_x_discrete(labels = c("Experts on\nNeedle Exchange","Scientists on\nGMO Ban","Economists on\nRent Control"))+
   theme(legend.position = "right") + 
-  theme_minimal()+
-  ggsave("Figs/fig_bias.png", unit = "in",width=7.5, height=5,dpi = 600)
+  theme_minimal()
+
+ggsave("Figs/fig_bias.png", unit = "in",width=7.5, height=5,dpi = 600)
 
 
 ## fig_deference ####
@@ -404,11 +418,12 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   scale_y_continuous(labels = percent) +
   scale_x_discrete(labels = c("Experts on\nNeedle Exchange","Scientists on\nGMO Ban","Economists on\nRent Control"))+
   theme(legend.position = "right") + 
-  theme_minimal()+
-  ggsave("Figs/fig_deference.png", unit = "in",width=7.5, height=5,dpi = 600)
+  theme_minimal()
+
+ggsave("Figs/fig_deference.png", unit = "in",width=7.5, height=5,dpi = 600)
 
 
-### fig_polarity ####
+### fig_polarity #### # Fig A3 
 results <- df %>%
   select(polarization,party_bin,issue)%>%
   filter(!is.na(issue)&!is.na(polarization)&!is.na(party_bin))%>%
@@ -434,7 +449,9 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   ylab("")+
   theme_minimal()+
   #ggtitle("Relative Likelihood that Republican\n(vs. Democratic) Party Supports Policy")+
-  scale_y_continuous(labels = percent)+ ggsave("Figs/fig_polarity.png", unit = "in",width=7.5, height=5)
+  scale_y_continuous(labels = percent)
+
+ggsave("Figs/fig_polarity.png", unit = "in",width=7.5, height=5)
 
 
 
@@ -448,8 +465,8 @@ beliefs_NEP <- df%>%
   mutate(condition = factor(ifelse(treated == 1,"With expert evidence",
                                    "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
   group_by(condition) %>%  summarise(. ,count = n(),mean = mean(accuracy),
-                                          se = sd(accuracy)/sqrt(count), ci   = se * 1.96,
-                                          lower = mean - ci,upper = mean + ci)%>%
+                                     se = sd(accuracy)/sqrt(count), ci   = se * 1.96,
+                                     lower = mean - ci,upper = mean + ci)%>%
   as.data.frame(.)%>%ggplot() + 
   aes(x=condition,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,position = position_dodge(width=0.5))+
@@ -475,11 +492,11 @@ preferences_NEP <-  df %>%
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
   select(party_bin,treated,preference)%>%
   mutate(
-         condition = factor(ifelse(treated == 1,"With expert evidence",
-                                   "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
+    condition = factor(ifelse(treated == 1,"With expert evidence",
+                              "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
   group_by(condition) %>%  summarise(. ,count = n(),mean = mean(preference),
-                                          se = sd(preference)/sqrt(count), ci   = se * 1.96,
-                                          lower = mean - ci,upper = mean + ci)%>%
+                                     se = sd(preference)/sqrt(count), ci   = se * 1.96,
+                                     lower = mean - ci,upper = mean + ci)%>%
   as.data.frame(.)%>%ggplot() + 
   aes(x=condition,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,
@@ -511,11 +528,11 @@ beliefs_GMO <- df %>%
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
   select(party_bin,treated,accuracy)%>%
   mutate(
-         condition = factor(ifelse(treated == 1,"With expert evidence",
-                                   "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
+    condition = factor(ifelse(treated == 1,"With expert evidence",
+                              "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
   group_by(condition) %>%  summarise(. ,count = n(),mean = mean(accuracy),
-                                          se = sd(accuracy)/sqrt(count), ci   = se * 1.96,
-                                          lower = mean - ci,upper = mean + ci)%>%
+                                     se = sd(accuracy)/sqrt(count), ci   = se * 1.96,
+                                     lower = mean - ci,upper = mean + ci)%>%
   as.data.frame(.)%>%ggplot() + 
   aes(x=condition,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,position = position_dodge(width=0.5))+
@@ -543,11 +560,11 @@ beliefs_RC <- df %>%
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
   select(party_bin,treated,accuracy)%>%
   mutate(
-         condition = factor(ifelse(treated == 1,"With expert evidence",
-                                   "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
+    condition = factor(ifelse(treated == 1,"With expert evidence",
+                              "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
   group_by(condition) %>%  summarise(. ,count = n(),mean = mean(accuracy),
-                                          se = sd(accuracy)/sqrt(count), ci   = se * 1.96,
-                                          lower = mean - ci,upper = mean + ci)%>%
+                                     se = sd(accuracy)/sqrt(count), ci   = se * 1.96,
+                                     lower = mean - ci,upper = mean + ci)%>%
   as.data.frame(.)%>%ggplot() + 
   aes(x=condition,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,position = position_dodge(width=0.5))+
@@ -575,11 +592,11 @@ preferences_GMO <-   df %>%
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
   select(party_bin,treated,preference)%>%
   mutate(
-         condition = factor(ifelse(treated == 1,"With expert evidence",
-                                   "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
+    condition = factor(ifelse(treated == 1,"With expert evidence",
+                              "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
   group_by(condition) %>%  summarise(. ,count = n(),mean = mean(preference),
-                                          se = sd(preference)/sqrt(count), ci   = se * 1.96,
-                                          lower = mean - ci,upper = mean + ci)%>%
+                                     se = sd(preference)/sqrt(count), ci   = se * 1.96,
+                                     lower = mean - ci,upper = mean + ci)%>%
   as.data.frame(.)%>%ggplot() + 
   aes(x=condition,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,position = position_dodge(width=0.5))+
@@ -607,11 +624,11 @@ preferences_RC <-   df %>%
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
   select(party_bin,treated,preference)%>%
   mutate(
-         condition = factor(ifelse(treated == 1,"With expert evidence",
-                                   "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
+    condition = factor(ifelse(treated == 1,"With expert evidence",
+                              "Without expert evidence"), levels = c("Without expert evidence","With expert evidence")))%>%
   group_by(condition) %>%  summarise(. ,count = n(),mean = mean(preference),
-                                          se = sd(preference)/sqrt(count), ci   = se * 1.96,
-                                          lower = mean - ci,upper = mean + ci)%>%
+                                     se = sd(preference)/sqrt(count), ci   = se * 1.96,
+                                     lower = mean - ci,upper = mean + ci)%>%
   as.data.frame(.)%>%ggplot() + 
   aes(x=condition,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,position = position_dodge(width=0.5))+
@@ -645,7 +662,7 @@ plot_grid(p,legend,nrow=2,rel_heights = c(7,1))+  ggsave("Figs/fig_levels.png", 
 ##### fig_levels_by_party  #######
 policy <- "Needle Exchange"
 beliefs_NEP <- df%>%
- # df %>% 
+  # df %>% 
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
   select(party_bin,treated,accuracy)%>%
   mutate(type = party_bin,
@@ -658,21 +675,21 @@ beliefs_NEP <- df%>%
   aes(x=type,y =mean, color=condition) + 
   geom_point(stat='identity',size=0.5,position = position_dodge(width=0.5))+
   geom_errorbar(aes(ymin = lower, ymax = upper),width=0.2,position = position_dodge(width=0.5))+
-   theme_minimal()+
-
-    scale_y_continuous(breaks = c(0,0.25,0.5,0.75,1),limits=c(0,1),
+  theme_minimal()+
+  
+  scale_y_continuous(breaks = c(0,0.25,0.5,0.75,1),limits=c(0,1),
                      labels = c("Least accurate \n(<20% experts)","","","","Most accurate \n(>80% experts)"))+
   scale_color_manual(name = NULL, 
                      values = c("Without expert evidence" = "#006600",
                                 "With expert evidence"  = "#660099"))+
   xlab("")+ylab("Belief")+ ggtitle(policy)+
   # labs(subtitle="Belief about Experts")+
-    theme(legend.position = "none",
-          axis.text.y =element_text(size=8),
-          axis.title.y = element_text(size=11,vjust = -10,face = 'bold'),
-  axis.text.x = element_text(size=8),
-  axis.title.x = element_text(size=12),
-  plot.title = element_text(face = 'bold',hjust = 0.5,size=11))
+  theme(legend.position = "none",
+        axis.text.y =element_text(size=8),
+        axis.title.y = element_text(size=11,vjust = -10,face = 'bold'),
+        axis.text.x = element_text(size=8),
+        axis.title.x = element_text(size=12),
+        plot.title = element_text(face = 'bold',hjust = 0.5,size=11))
 
 policy <- "Needle Exchange"
 preferences_NEP <-  df %>% 
@@ -695,8 +712,8 @@ preferences_NEP <-  df %>%
                      labels = c("Least congruent","","","","","",
                                 "Most congruent"))+
   scale_color_manual(name = NULL, 
-                        values = c("Without expert evidence" = "#006600",
-                                   "With expert evidence"  = "#660099"))+
+                     values = c("Without expert evidence" = "#006600",
+                                "With expert evidence"  = "#660099"))+
   xlab("")+ylab("Preference")+# ggtitle("")+
   # labs(subtitle="Belief about Experts")+
   theme(legend.position = "none",
@@ -711,8 +728,8 @@ preferences_NEP <-  df %>%
 
 policy <- "GMO Ban"
 beliefs_GMO <- df %>% 
-# df%>% 
-   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
+  # df%>% 
+  filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
   select(party_bin,treated,accuracy)%>%
   mutate(type = party_bin,
          condition = factor(ifelse(treated == 1,"With expert evidence",
@@ -743,8 +760,8 @@ beliefs_GMO <- df %>%
 
 policy <- "Rent Control"
 beliefs_RC <- df %>% 
-# df%>% 
-   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
+  # df%>% 
+  filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
   select(party_bin,treated,accuracy)%>%
   mutate(type = party_bin,
          condition = factor(ifelse(treated == 1,"With expert evidence",
@@ -775,8 +792,8 @@ beliefs_RC <- df %>%
 
 policy <- "GMO Ban"
 preferences_GMO <-   df %>% 
-# df%>%
-   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
+  # df%>%
+  filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
   select(party_bin,treated,preference)%>%
   mutate(type = party_bin,
          condition = factor(ifelse(treated == 1,"With expert evidence",
@@ -807,8 +824,8 @@ preferences_GMO <-   df %>%
 
 policy <- "Rent Control"
 preferences_RC <-   df %>% 
-# df%>%
-   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
+  # df%>%
+  filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(preference)&!is.na(party_bin)) %>%
   select(party_bin,treated,preference)%>%
   mutate(type = party_bin,
          condition = factor(ifelse(treated == 1,"With expert evidence",
@@ -1118,9 +1135,9 @@ preferences <-     panel_stacked%>%
   geom_errorbar(aes(ymin = lower, ymax = upper),width=0.2,
                 position = position_dodge(width=0.5))+
   theme_minimal()+ scale_y_continuous(breaks = c(0,1/6,2/6,3/6,4/6,5/6,6/6),
-                                        limits=c(-0.01,1),
-                                        labels = c("Least   \ncongruent","","","","","","Most   \ncongruent"))+
-                       scale_color_manual(name = NULL, 
+                                      limits=c(-0.01,1),
+                                      labels = c("Least   \ncongruent","","","","","","Most   \ncongruent"))+
+  scale_color_manual(name = NULL, 
                      values = c("Without expert evidence" = "#006600",
                                 "With expert evidence"  = "#660099"))+
   xlab("")+ylab("")+ ggtitle("Preferences")+
@@ -1137,9 +1154,9 @@ preferences <-     panel_stacked%>%
 
 p <-plot_grid(beliefs,preferences,nrow=1,rel_widths = c(1.2,1))
 legend <- get_legend(beliefs + theme(legend.justification = "center",
-                                         legend.text=element_text(size=10),
-                                         legend.background = element_rect(colour = 'white'),
-                                         legend.position = "bottom"))
+                                     legend.text=element_text(size=10),
+                                     legend.background = element_rect(colour = 'white'),
+                                     legend.position = "bottom"))
 
 
 plot_grid(p,legend,nrow=2,rel_heights = c(7,1))+  ggsave("Figs/fig_levels_by_elected.png", unit = "in",width=7.5, height=6.5)
@@ -1199,7 +1216,7 @@ preferences <-     panel_stacked%>%
   scale_y_continuous(breaks = c(0,1/6,2/6,3/6,4/6,5/6,6/6),
                      limits=c(-0.01,1),
                      labels = c("Least   \ncongruent","","","","","","Most   \ncongruent"))+
- scale_color_manual(name = NULL, 
+  scale_color_manual(name = NULL, 
                      values = c("Without expert evidence" = "#006600",
                                 "With expert evidence"  = "#660099"))+
   xlab("")+ylab("")+ ggtitle("Preferences")+
@@ -1296,9 +1313,9 @@ preferences <-
 
 p <-plot_grid(beliefs,preferences,nrow=1,rel_widths = c(1.2,1))
 legend <- get_legend(beliefs + theme(legend.justification = "center",
-                                         legend.text=element_text(size=10),
-                                         legend.background = element_rect(colour = 'white'),
-                                         legend.position = "bottom"))
+                                     legend.text=element_text(size=10),
+                                     legend.background = element_rect(colour = 'white'),
+                                     legend.position = "bottom"))
 
 
 plot_grid(p,legend,nrow=2,rel_heights = c(7,1))+  ggsave("Figs/fig_levels_by_familiarity.png", unit = "in",width=7.5, height=6.5)
@@ -1811,8 +1828,8 @@ df %>%
 
 panel_stacked %>% 
   filter(!is.na(accuracy))%>%select(accuracy,accuracy_3_level,issue,treated)%>%tab(treated)
-  
-  panel_stacked %>% 
+
+panel_stacked %>% 
   filter(!is.na(accuracy))%>%select(accuracy,accuracy_3_level,issue,treated)%>%
   # mutate(accuracy_3_level = factor(ifelse(accuracy_3_level == "control","Without expert message",
   # "With expert message"), levels = c("Without expert message","With expert message")))%>%
@@ -1836,7 +1853,7 @@ panel_stacked %>%
   summarise(. ,count = n(),
             sum = first(sum),
             prop = count/sum)%>%arrange(desc(preference))%>%filter(preference==1)%>%
-filter(preference==1&!preference_3_level%in%c("Most\nCongruent"))
+  filter(preference==1&!preference_3_level%in%c("Most\nCongruent"))
 
 
 
@@ -1849,22 +1866,22 @@ reg_experiment = function(df,outcome,interact){
   else{if(outcome == "accuracy"&interact==T){return(lm(accuracy ~ treated*republican,d=df))}
     else{if(outcome == "preference"&interact==F){return(lm(preference ~ treated,d=df))}
       else{if(outcome == "preference"&interact==T){return(lm(preference ~  treated*republican,d=df))}
-    }}}}
+      }}}}
 
 regs <- list(reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",],"accuracy",F),
-     reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",],"accuracy",T),
-     reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",],"accuracy",F),
-     reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",],"accuracy",T),
-     reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",],"accuracy",F),
-     reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",],"accuracy",T))
-     
+             reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",],"accuracy",T),
+             reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",],"accuracy",F),
+             reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",],"accuracy",T),
+             reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",],"accuracy",F),
+             reg_experiment(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",],"accuracy",T))
+
 ses <- lapply(lapply(lapply(regs,vcov),diag),sqrt)
 stargazer(regs, 
           out = "Tabs/tab_effects_beliefs_CP18.tex", 
           type= "latex",
           title="",header=T, float = F,
           column.labels = c("Needles","Needles","GMO","GMO","Rent Control","Rent Control"),
-        #  covariate.labels = c("treated","republican"),
+          #  covariate.labels = c("treated","republican"),
           model.numbers = F, omit.stat=c("ser","f","Rsq","adj.rsq"),
           se=ses,digits = 2,  dep.var.caption = "", dep.var.labels.include = F, no.space = T,
           notes = c("$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01"),
@@ -1917,11 +1934,11 @@ stargazer(regs,
           notes.append = F,notes.label = "")
 ## tab_effects_urban ####
 reg_1 = function(df,outcome){
-lm(preference ~  treated*Urban_bin,d=df)}
+  lm(preference ~  treated*Urban_bin,d=df)}
 
 regs <- list(reg_1(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",],"preference"),
              reg_1(df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",],"preference"),
-              reg_1(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",],"preference"))
+             reg_1(df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",],"preference"))
 
 
 ses <- lapply(lapply(lapply(regs,vcov),diag),sqrt)
@@ -2147,7 +2164,7 @@ stargazer(regs,
           type= "latex",
           title="",header=T, float = F,
           column.labels = c("Needles","Needles","GMO","GMO","Rent Control","Rent Control"),
-         order = c("Constant"),
+          order = c("Constant"),
           covariate.labels = c("Constant","Least congruent","Most congruent"),
           model.numbers = F, omit.stat=c("ser","f","Rsq","adj.rsq"),
           se=ses,digits = 2,  dep.var.caption = "", dep.var.labels.include = F, no.space = T,
@@ -2157,8 +2174,8 @@ stargazer(regs,
 
 ## Table updating by party and prior ####
 regs <- list(lm(accuracy_response ~ republican,d=df[df$accuracy==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",]),
-                lm(accuracy_response ~ republican,d=df[df$accuracy==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",]),
-                   lm(accuracy_response ~ republican,d=df[df$accuracy==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",]),
+             lm(accuracy_response ~ republican,d=df[df$accuracy==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",]),
+             lm(accuracy_response ~ republican,d=df[df$accuracy==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",]),
              lm(preference_response ~ republican,d=df[df$preference==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",]),
              lm(preference_response ~ republican,d=df[df$preference==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",]),
              lm(preference_response ~ republican,d=df[df$preference==0.5&df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",]))    
