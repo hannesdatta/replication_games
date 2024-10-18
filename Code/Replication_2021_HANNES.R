@@ -5,14 +5,14 @@ rm(list = ls())
 # Tables will be output to a folder called "Tabs"
 
 library(statar)
-library(doStata)
+#library(doStata) HD: not required?!
 library(tidyverse)
 library(stargazer)
 library(scales)
 require(cowplot)
 require(xtable)
 #### Read-in ####
-df_original <- read.csv("Data/Public_access_datafile_APSR_Lee_2021.csv",stringsAsFactors = F)
+df_original <- read.csv("../Data/Public_access_datafile_APSR_Lee_2021.csv",stringsAsFactors = F)
 
 ### Pre-processing, df ####
 df<-df_original%>%mutate(issue = ifelse(issue=="GMO","GMO Ban",issue),
@@ -61,7 +61,7 @@ c <- "Most\nCongruent"
 df$preference_3_level <- ifelse(df$preference > 0.5, c,"")
 df$preference_3_level <- ifelse(df$preference == 0.5,b,df$preference_3_level)
 df$preference_3_level <- ifelse(df$preference < 0.5, a,df$preference_3_level)
-df$preference_3_level <- factor(df$preference_3_level, levels = c(a,b,c))
+df$preference_3_level <- factor(df$preference_3_level, levels = c(b,a,c))
 
 a <- "Least\nAccurate"
 b <- "Somewhat\nAccurate"
@@ -69,7 +69,7 @@ c <- "Most\nAccurate"
 df$accuracy_3_level <- ifelse(df$accuracy > 0.5, c,"")
 df$accuracy_3_level <- ifelse(df$accuracy == 0.5,b,df$accuracy_3_level)
 df$accuracy_3_level <- ifelse(df$accuracy < 0.5, a,df$accuracy_3_level)
-df$accuracy_3_level <- factor(df$accuracy_3_level, levels = c(a,b,c))
+df$accuracy_3_level <- factor(df$accuracy_3_level, levels = c(b,a,c))
 
 df$accuracy_posterior <- df$accuracy + df$accuracy_response
 df$accuracy_response_bin = ifelse(df$accuracy_posterior>0.5&df$accuracy<0.51,1,NA)
@@ -83,7 +83,7 @@ df$preference_response_bin = ifelse(df$preference_posterior>0.5&df$preference>0.
 df$preference_response_bin = ifelse(df$preference_posterior<0.51&df$preference<0.51,0,df$preference_response_bin)
 df$preference_response_bin = ifelse(df$preference_posterior<0.51&df$preference>0.51,0,df$preference_response_bin)
 
-df$bias_num <- ifelse(df$bias == "Unbiased",1,0)
+#df$bias_num <- ifelse(df$bias == "Unbiased",1,0)
 
 df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Extremely important","1",df[,"decision_factors_decision_factors_experts"])
 df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Very important","0.75",df[,"decision_factors_decision_factors_experts"])
@@ -123,7 +123,7 @@ results <- df %>%
 
 results$se = results$sd/sqrt(results$n)
 results$ci = results$se*1.96
-
+dir.create('../Figs/') # add dir 
 ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   geom_bar(width = 0.5, position='dodge', stat='identity')+
   geom_errorbar(aes(ymin=mean - ci,ymax=mean + ci), width=0.15, colour="gray48", position = position_dodge(width = 0.5)) +
@@ -136,9 +136,9 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   scale_y_continuous(labels = percent) +
   scale_x_discrete(labels = c("Support\nNeedle Exchange","Oppose\nGMO Ban","Oppose\nRent Control"))+
   theme(legend.position = "right") + 
-  theme_minimal()+
-  ggsave("Figs/fig_pref_control.png", unit = "in",width=7.5, height=5,dpi = 600)
+  theme_minimal()
 
+ggsave("../Figs/fig_pref_control.png", unit = "in",width=7.5, height=5,dpi = 600)
 
 
 
@@ -193,8 +193,8 @@ preference = plot_grid(fig_effect(reg1b,range,"Δ Congruence","Policy Preference
 p <- plot_grid(beliefs,preference,ncol=2,rel_widths  = c(1,1))
 
 
-plot_grid(p) + ggsave("Figs/fig_effects.png", 
-                      unit = "in",width=7.5, height=6.5)
+plot_grid(p)
+ggsave("../Figs/fig_effects.png", unit = "in",width=7.5, height=6.5)
 
 #### fig_effects_by_party [Fig 3] #####
 range <- c(-.09,.25)
@@ -256,8 +256,8 @@ legend <- get_legend(fig_effects_by_party(reg2p,range,"","Policy Preferences","G
                        theme(legend.text = element_text(margin = margin(r = 10, l =  10, unit = "pt"))))
 
 
-plot_grid(p,legend,nrow=2,rel_heights = c(7,1)) + ggsave("Figs/fig_effects_by_party.png", 
-                                                         unit = "in",width=7.5, height=6.5)
+plot_grid(p,legend,nrow=2,rel_heights = c(7,1))
+ggsave("../Figs/fig_effects_by_party.png", unit = "in",width=7.5, height=6.5)
 dev.off()
 
 #### fig_updating_by_prior [Fig 4] #####
@@ -339,10 +339,11 @@ prefs = plot_grid(fig_preference_updating_by_prior(reg1p,range_p,"Δ Congruence"
 
 p <- plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
 
-plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))+ 
-  ggsave("Figs/fig_updating_by_prior.png",unit = "in",width=7.5, height=6)
+plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
+ggsave("../Figs/fig_updating_by_prior.png",unit = "in",width=7.5, height=6)
 dev.off()
 
+quit() # quit here - reproduced figure 4
 
 ### DESCRIPTIVES BY POLICIES
 ## fig_bias ####
