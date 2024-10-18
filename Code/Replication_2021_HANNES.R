@@ -4,6 +4,9 @@ rm(list = ls())
 # Figures will be output to a folder called "Figs"
 # Tables will be output to a folder called "Tabs"
 
+# remove previously generated files
+unlink('../Fig/*')
+
 library(statar)
 #library(doStata) HD: not required?!
 library(tidyverse)
@@ -12,101 +15,113 @@ library(scales)
 require(cowplot)
 require(xtable)
 #### Read-in ####
+
 df_original <- read.csv("../Data/Public_access_datafile_APSR_Lee_2021.csv",stringsAsFactors = F)
+
+#### Helper functions
+helper_binning <- function(x) ifelse(x>.5, 1,0)
+helper_3 <- function(x) {
+  out = ifelse(x > .5, 1, 0)
+  out = ifelse(x == .5, .5, out)
+  out = ifelse(x < .5, 0, out)
+  out
+}
 
 ### Pre-processing, df ####
 df<-df_original%>%mutate(issue = ifelse(issue=="GMO","GMO Ban",issue),
                          issue = ifelse(issue=="RC","Rent Control",issue),
                          issue = ifelse(issue=="NEP","Needle Exchange",issue),
                          issue = factor(issue,levels = c("Needle Exchange","GMO Ban","Rent Control")),
-                         preference_bin = ifelse(preference>0.5,1,0),
-                         policy_bin = ifelse(preference>0.5,1,0),
-                         preference_3 = ifelse(preference>0.5,1,0),
-                         preference_3 = ifelse(preference==0.5,0.5,preference_3),
-                         preference_3 = ifelse(preference<0.5,0,preference_3),
-                         accuracy_3 = ifelse(accuracy>0.5,1,0),
-                         accuracy_bin = ifelse(accuracy>0.5,1,0),
-                         accuracy_3 = ifelse(accuracy==0.5,0.5,accuracy_3),
-                         accuracy_3 = ifelse(accuracy<0.5,0,accuracy_3),
+                         preference_bin = helper_binning(preference),
+                         policy_bin = helper_binning(preference),
+                         preference_3 = helper_3(preference),
+                         accuracy_3 = helper_3(accuracy),
+                         accuracy_bin = helper_binning(accuracy),
                          gender=  ifelse(female==1,"Women","Men"),
                          age_bin=  cut(age, breaks= quantile(age,probs = seq(0,1,1/2),na.rm = T),
-                                       labels=c("Younger","Older")),
+                                       labels=c("Younger","Older"), include.lowest = TRUE),
                          exp_bin=  cut(gov_exp, breaks= quantile(gov_exp,probs = seq(0,1,1/2),na.rm = T),
-                                       labels=c("Less experience","More experience")),
-                         polarization = republican_alignment -democrat_alignment,
+                                       labels=c("Less experience","More experience"), include.lowest = TRUE),
+                         polarization = republican_alignment - democrat_alignment,
                          moderate = ifelse(ideo5=="Moderate, middle of the road",1,0),
                          conservative = ifelse(ideo5%in%c("Somewhat conservative","Very conservative"),1,0),
+                         # why are 'Not sure' included in 'liberal'?
+                         
                          republican = ifelse(pid_3=="Republican",1,NA),
                          republican = ifelse(!is.na(pid_indep)&pid_indep=="Republican Party",1,republican),
                          republican = ifelse(pid_3=="Democrat",0,republican),
                          republican = ifelse(!is.na(pid_indep)&pid_indep=="Democratic Party",0,republican),
+                         
+                         # to verify later - I don't get
                          republican_alignment <- ifelse(partisan_diss %in% c("Democrats are more likely to support rent control","Democrats are more likely to support a GMO ban","Republicans are more likely to support the use of needle exchanges"),1,0),
                          democrat_alignment <- ifelse(partisan_diss %in% c("Republicans are more likely to support rent control","Republicans are more likely to support a GMO ban","Democrats are more likely to support the use of needle exchanges"),1,0),
                          party_bin = factor(ifelse(republican==1,"Republican","Democrat")),
                          policymaker = 1,
                          survey = "CP18")
 
+
 df$familiarity <- as.numeric(df$familiarity)
 df$familiarity_3 <- ifelse(df$familiarity==1,1,NA)
 df$familiarity_3 <- ifelse(df$familiarity==0.67,0.5,df$familiarity_3)
 df$familiarity_3 <- ifelse(df$familiarity==0.33,0,df$familiarity_3)
 df$familiarity_3 <- ifelse(df$familiarity==0,0,df$familiarity_3)
-
 df$familiarity_bin <- ifelse(df$familiarity_3==0,0,1)
+
+helper_levels = function(x, cutoff = .5, levels, levels_order) {
+  out = ifelse(x > cutoff, levels[3], "")
+  out = ifelse(x == cutoff, levels[2], out)
+  out = ifelse(x < cutoff, levels[1], out)
+  out = factor(out, levels=levels_order)
+  out
+}
 
 a <- "Least\nCongruent"
 b <- "Somewhat\nCongruent"
 c <- "Most\nCongruent"
 
-df$preference_3_level <- ifelse(df$preference > 0.5, c,"")
-df$preference_3_level <- ifelse(df$preference == 0.5,b,df$preference_3_level)
-df$preference_3_level <- ifelse(df$preference < 0.5, a,df$preference_3_level)
-df$preference_3_level <- factor(df$preference_3_level, levels = c(b,a,c))
+df$preference_3_level = helper_levels(x = df$preference, levels = c(a,b,c), levels_order=c(b,a,c))
 
 a <- "Least\nAccurate"
 b <- "Somewhat\nAccurate"
 c <- "Most\nAccurate"
-df$accuracy_3_level <- ifelse(df$accuracy > 0.5, c,"")
-df$accuracy_3_level <- ifelse(df$accuracy == 0.5,b,df$accuracy_3_level)
-df$accuracy_3_level <- ifelse(df$accuracy < 0.5, a,df$accuracy_3_level)
-df$accuracy_3_level <- factor(df$accuracy_3_level, levels = c(b,a,c))
 
-df$accuracy_posterior <- df$accuracy + df$accuracy_response
-df$accuracy_response_bin = ifelse(df$accuracy_posterior>0.5&df$accuracy<0.51,1,NA)
-df$accuracy_response_bin = ifelse(df$accuracy_posterior>0.5&df$accuracy>0.5,0,df$accuracy_response_bin)
-df$accuracy_response_bin = ifelse(df$accuracy_posterior<0.51&df$accuracy<0.51,0,df$accuracy_response_bin)
-df$accuracy_response_bin = ifelse(df$accuracy_posterior<0.51&df$accuracy>0.51,0,df$accuracy_response_bin)
+df$accuracy_3_level <- helper_levels(x = df$accuracy, levels = c(a,b,c), levels_order=c(b,a,c))
+
+
+# HD: what do they do here?! is it actually needed?
+helper_posterior_binning <- function(x_post, x, cutoff = .5) {
+  
+  out = ifelse(x_post>cutoff&x<=cutoff, 1, NA)
+  out = ifelse(x_post>cutoff&x>cutoff, 0, out)
+  out = ifelse(x_post<=cutoff&x<=cutoff, 0, out)
+  out = ifelse(x_post<=cutoff&x>cutoff, 0, out)
+  out 
+}
+
+# HD: is this required?
+df$accuracy_posterior <- df$accuracy + df$accuracy_response # HD: what is this?!
+df$accuracy_response_bin = helper_posterior_binning(df$accuracy_posterior, df$accuracy)
 
 df$preference_posterior <- df$preference + df$preference_response
-df$preference_response_bin = ifelse(df$preference_posterior>0.5&df$preference<0.51,1,NA)
-df$preference_response_bin = ifelse(df$preference_posterior>0.5&df$preference>0.51,0,df$preference_response_bin)
-df$preference_response_bin = ifelse(df$preference_posterior<0.51&df$preference<0.51,0,df$preference_response_bin)
-df$preference_response_bin = ifelse(df$preference_posterior<0.51&df$preference>0.51,0,df$preference_response_bin)
+df$preference_response_bin3 = helper_posterior_binning(df$preference_posterior, df$preference)
 
 #df$bias_num <- ifelse(df$bias == "Unbiased",1,0)
 
-df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Extremely important","1",df[,"decision_factors_decision_factors_experts"])
-df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Very important","0.75",df[,"decision_factors_decision_factors_experts"])
-df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Moderately important","0.5",df[,"decision_factors_decision_factors_experts"])
-df[,"decision_factors_decision_factors_experts"] = ifelse(df[,"decision_factors_decision_factors_experts"]=="Slightly important","0.25",df[,"decision_factors_decision_factors_experts"])
-df[,"decision_factors_decision_factors_experts"] = as.numeric(ifelse(df[,"decision_factors_decision_factors_experts"]=="Not at all important","0",df[,"decision_factors_decision_factors_experts"]))
-
-df$deference_num=ifelse(df$decision_factors_decision_factors_experts>0.25,1,0)
+df$deference_num=ifelse(df$decision_factors_decision_factors_experts>0.25,1,0) # HD: why this cutoff?
 df$deference =ifelse(df$deference_num == 1,"High deference",NA)
-df$deference =ifelse(df$deference_num == 0,"Low deference",NA)
-
-
+df$deference =ifelse(df$deference_num == 0,"Low deference",df$deference)
 
 panel_control <- df[df$treated==0,]
 
-panel_treated <- panel_control%>%
-  mutate(accuracy = accuracy + accuracy_response,
+panel_treated <- panel_control %>%
+  mutate(accuracy = accuracy + accuracy_response, 
          preference = preference + preference_response,
-         treated=1)
+         treated=1) 
 
 panel_stacked <- rbind(panel_treated,panel_control)
 panel_stacked$method = "Within-\nsubject"
 df$method = "Across-\nsubject"
+
 combined=rbind(df,panel_stacked)
 
 ##### fig_pref_control_by_party [Fig 1] ######
@@ -124,33 +139,41 @@ results <- df %>%
 results$se = results$sd/sqrt(results$n)
 results$ci = results$se*1.96
 dir.create('../Figs/') # add dir 
+
 ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   geom_bar(width = 0.5, position='dodge', stat='identity')+
   geom_errorbar(aes(ymin=mean - ci,ymax=mean + ci), width=0.15, colour="gray48", position = position_dodge(width = 0.5)) +
   scale_fill_manual(values = c("firebrick","cornflowerblue"),guide=guide_legend(title=NULL))+
-  #geom_text(aes(label=mean), position=position_dodge(width=0.9), vjust=5.5, size=4)+
   theme(plot.title = element_text(hjust = 0.5),legend.position = "none")+
   xlab('')+ 
   ylab('')+
   ggtitle("")+
   scale_y_continuous(labels = percent) +
-  scale_x_discrete(labels = c("Support\nNeedle Exchange","Oppose\nGMO Ban","Oppose\nRent Control"))+
+  scale_x_discrete(labels = c("Needle Exchange"="Support\nNeedle Exchange",
+                              "GMO Ban" = "Oppose\nGMO Ban",
+                              "Rent Control" ="Oppose\nRent Control"))+
   theme(legend.position = "right") + 
   theme_minimal()
 
 ggsave("../Figs/fig_pref_control.png", unit = "in",width=7.5, height=5,dpi = 600)
 
 
-
 ##### fig_effects.png [Fig 2] ####
-range <- c(-.09,.25)
-reg1b <- lm(accuracy~ treated, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",])
-reg2b <- lm(accuracy~ treated, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",])
-reg3b <- lm(accuracy~ treated, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",])
-reg1p <- lm(preference~ treated, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",])
-reg2p <- lm(preference~ treated, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",])
-reg3p <- lm(preference~ treated, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",])
+issues = c('Needle Exchange', 'GMO Ban', 'Rent Control')
 
+helper_regs <- function(form, issues, data) {
+  out=lapply(issues, function(.issue) lm(form, data=data[data[,"issue"]==.issue,]))
+  names(out) <- issues
+  out
+}
+
+d = df[df$survey=="CP18"&df$policymaker==1,]
+
+# running the regressions
+regb = helper_regs(accuracy ~ treated, issues = issues, data = d)
+regp = helper_regs(preference~ treated, issues = issues, data = d)
+
+range <- c(-.09,.25)
 
 fig_effect = function(reg_effect,range,ylabel,subtitle,maintitle){
   coeffs_effect = as.data.frame(summary(reg_effect)$coefficient)
@@ -160,7 +183,6 @@ fig_effect = function(reg_effect,range,ylabel,subtitle,maintitle){
   results[,"mean"] <- coeffs_effect["treated","Estimate"]
   results[,"se"] <- coeffs_effect["treated","Std. Error"]
   results$ci <- results$se * 1.96
-  # results$colour = c("#006600","#003300")
   
   p <- ggplot(data=results, aes(y=mean,x="")) +
     geom_point(stat='identity',size=0.5)+
@@ -181,29 +203,27 @@ fig_effect = function(reg_effect,range,ylabel,subtitle,maintitle){
   return(p)}
 
 
-beliefs = plot_grid(fig_effect(reg1b,range,"Δ Accuracy","Belief about Experts","Needle Exchange"),
-                    fig_effect(reg2b,range,"Δ Accuracy","Belief about Experts","GMO Ban"),
-                    fig_effect(reg3b,range,"Δ Accuracy","Belief about Experts","Rent Control"),ncol=1)
+beliefs = plot_grid(fig_effect(regb$`Needle Exchange`,range,"Δ Accuracy","Belief about Experts","Needle Exchange"),
+                    fig_effect(regb$`GMO Ban`,range,"Δ Accuracy","Belief about Experts","GMO Ban"),
+                    fig_effect(regb$`Rent Control`,range,"Δ Accuracy","Belief about Experts","Rent Control"),ncol=1)
 
-preference = plot_grid(fig_effect(reg1b,range,"Δ Congruence","Policy Preference","Needle Exchange"),
-                       fig_effect(reg2b,range,"Δ Congruence","Policy Preference","GMO Ban"),
-                       fig_effect(reg3b,range,"Δ Congruence","Policy Preference","Rent Control"),ncol=1)
+preference = plot_grid(fig_effect(regp$`Needle Exchange`,range,"Δ Congruence","Policy Preference","Needle Exchange"),
+                       fig_effect(regp$`GMO Ban`,range,"Δ Congruence","Policy Preference","GMO Ban"),
+                       fig_effect(regp$`Rent Control`,range,"Δ Congruence","Policy Preference","Rent Control"),ncol=1)
 
-
-p <- plot_grid(beliefs,preference,ncol=2,rel_widths  = c(1,1))
-
+p <- plot_grid(beliefs,preference, ncol=2, rel_widths  = c(1,1))
 
 plot_grid(p)
 ggsave("../Figs/fig_effects.png", unit = "in",width=7.5, height=6.5)
 
 #### fig_effects_by_party [Fig 3] #####
 range <- c(-.09,.25)
-reg1b <- lm(accuracy~ treated*republican, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",])
-reg2b <- lm(accuracy~ treated*republican, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",])
-reg3b <- lm(accuracy~ treated*republican, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",])
-reg1p <- lm(preference~ treated*republican, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",])
-reg2p <- lm(preference~ treated*republican, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",])
-reg3p <- lm(preference~ treated*republican, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",])
+
+d = df[df$survey=="CP18"&df$policymaker==1,]
+
+regb = helper_regs(accuracy ~ treated*republican, issues = issues, data = d)
+regp = helper_regs(preference~ treated*republican, issues = issues, data = d)
+
 
 fig_effects_by_party = function(reg,range,ylabel,subtitle,maintitle){
   coeffs = as.data.frame(summary(reg)$coefficient)
@@ -218,7 +238,7 @@ fig_effects_by_party = function(reg,range,ylabel,subtitle,maintitle){
   results$ci <- results$se * 1.96
   results$party =c("democrat","republican")
   results$colour = c("cornflowerblue","firebrick")
-  
+
   p <- ggplot(results, aes(y=mean,x =party,range = range, colour = party)) +
     geom_point(stat='identity')+
     geom_errorbar(aes(ymin = mean - ci,ymax = mean + ci),width = 0.05)+
@@ -237,28 +257,31 @@ fig_effects_by_party = function(reg,range,ylabel,subtitle,maintitle){
           plot.title = element_text(face = 'bold',hjust = 0.5,size=12))
   return(p)}
 
-beliefs = plot_grid(fig_effects_by_party(reg1b,range,"Δ Accuracy","Belief about Experts","Needle Exchange"),
-                    fig_effects_by_party(reg2b,range,"Δ Accuracy","Belief about Experts","GMO Ban"),
-                    fig_effects_by_party(reg3b,range,"Δ Accuracy","Belief about Experts","Rent Control"),ncol=1)
+plotsb = lapply(names(regb), function(.name) fig_effects_by_party(regb[[.name]],range,"Δ Accuracy","Belief about Experts",.name))
+plotsp = lapply(names(regp), function(.name) fig_effects_by_party(regp[[.name]],range,"Δ Congruence","Policy Preference",.name))
 
-prefs = plot_grid(fig_effects_by_party(reg1p,range,"Δ Congruence","Policy Preference","Needle Exchange"),
-                  fig_effects_by_party(reg2p,range,"Δ Congruence","Policy Preference","GMO Ban"),
-                  fig_effects_by_party(reg3p,range,"Δ Congruence","Policy Preference","Rent Control"),ncol=1)
+
+beliefs = plot_grid(plotlist=plotsb, ncol=1)
+prefs = plot_grid(plotlist=plotsp, ncol = 1)
 
 p <- plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
 
-legend <- get_legend(fig_effects_by_party(reg2p,range,"","Policy Preferences","GMO Ban") + theme(legend.justification = "center",
-                                                                                                 legend.text=element_text(size=11),legend.title = element_blank(),
-                                                                                                 legend.background = element_rect(colour = 'white'),
-                                                                                                 legend.position = "bottom")+
-                       theme(legend.position = "bottom",legend.justification = 0.5)+
-                       theme(legend.key.width=unit(2,"line")) +
-                       theme(legend.text = element_text(margin = margin(r = 10, l =  10, unit = "pt"))))
+legend <- get_legend(
+  plotsb[[2]]+ theme(legend.justification = "center",
+                     legend.text=element_text(size=11,margin = margin(r = 10, l =  10, unit = "pt")),
+                     legend.title = element_blank(),
+                     legend.background = element_rect(colour = 'white'),
+                     legend.position = "bottom",
+                     legend.key.width=unit(2,"line")))
 
 
 plot_grid(p,legend,nrow=2,rel_heights = c(7,1))
 ggsave("../Figs/fig_effects_by_party.png", unit = "in",width=7.5, height=6.5)
 dev.off()
+
+# HD: don't get the legend resolved
+
+
 
 #### fig_updating_by_prior [Fig 4] #####
 fig_belief_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle){
@@ -270,7 +293,6 @@ fig_belief_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle){
   results[,"mean"] <- coeffs[,"Estimate"]
   results[,"se"] <- coeffs[,"Std. Error"]
   results$ci <- results$se * 1.96
-  #  results$colour = c("cornflowerblue","firebrick")
   
   p <- ggplot(results, aes(y=mean,x=accuracy_3_level)) +
     geom_point(stat='identity',size=0.5)+
@@ -319,23 +341,19 @@ fig_preference_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle)
   # scale_colour_manual(values = results$colour)+
   return(p)}
 
-reg1b <- lm(accuracy_response ~ accuracy_3_level -1 , d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",])
-reg2b <- lm(accuracy_response ~ accuracy_3_level -1, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",])
-reg3b <- lm(accuracy_response ~ accuracy_3_level - 1, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",])
-reg1p <- lm(preference_response ~ preference_3_level -1 , d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Needle Exchange",])
-reg2p <- lm(preference_response ~ preference_3_level -1, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="GMO Ban",])
-reg3p <- lm(preference_response ~ preference_3_level - 1, d=df[df$survey=="CP18"&df$policymaker==1&df$issue=="Rent Control",])
+
+regb = helper_regs(accuracy_response ~ accuracy_3_level -1, issues = issues, data = d)
+regp = helper_regs(preference_response~ preference_3_level -1, issues = issues, data = d)
 
 range_b <- c(-.15,.6)
 range_p <- c(-.05,.2)
 
-beliefs = plot_grid(fig_belief_updating_by_prior(reg1b,range_b,"Δ Accuracy","Belief about Experts","Needle Exchange"),
-                    fig_belief_updating_by_prior(reg2b,range_b,"Δ Accuracy","Belief about Experts","GMO Ban"),
-                    fig_belief_updating_by_prior(reg3b,range_b,"Δ Accuracy","Belief about Experts","Rent Control"),ncol=1)
+plotsb = lapply(names(regb), function(.name) fig_belief_updating_by_prior(regb[[.name]],range_b,"Δ Accuracy","Belief about Experts",.name))
+plotsp = lapply(names(regp), function(.name) fig_preference_updating_by_prior(regp[[.name]],range_p,"Δ Congruence","Policy Preference",.name))
 
-prefs = plot_grid(fig_preference_updating_by_prior(reg1p,range_p,"Δ Congruence","Policy Preference","Needle Exchange"),
-                  fig_preference_updating_by_prior(reg2p,range_p,"Δ Congruence","Policy Preference","GMO Ban"),
-                  fig_preference_updating_by_prior(reg3p,range_p,"Δ Congruence","Policy Preference","Rent Control"),ncol=1)
+
+beliefs = plot_grid(plotlist=plotsb, ncol=1)
+prefs = plot_grid(plotlist=plotsp, ncol = 1)
 
 p <- plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
 
@@ -344,6 +362,7 @@ ggsave("../Figs/fig_updating_by_prior.png",unit = "in",width=7.5, height=6)
 dev.off()
 
 quit() # quit here - reproduced figure 4
+
 
 ### DESCRIPTIVES BY POLICIES
 ## fig_bias ####
