@@ -105,6 +105,7 @@ df$accuracy_response_bin = helper_posterior_binning(df$accuracy_posterior, df$ac
 df$preference_posterior <- df$preference + df$preference_response
 df$preference_response_bin3 = helper_posterior_binning(df$preference_posterior, df$preference)
 
+# comment HD: we do not have the variable 'bias', so cannot create bias_num
 #df$bias_num <- ifelse(df$bias == "Unbiased",1,0)
 
 df$deference_num=ifelse(df$decision_factors_decision_factors_experts>0.25,1,0) # HD: why this cutoff?
@@ -282,7 +283,6 @@ dev.off()
 # HD: don't get the legend resolved
 
 
-
 #### fig_updating_by_prior [Fig 4] #####
 fig_belief_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle){
   coeffs = as.data.frame(summary(reg)$coefficient)
@@ -341,7 +341,6 @@ fig_preference_updating_by_prior = function(reg,range,ylabel,subtitle,maintitle)
   # scale_colour_manual(values = results$colour)+
   return(p)}
 
-
 regb = helper_regs(accuracy_response ~ accuracy_3_level -1, issues = issues, data = d)
 regp = helper_regs(preference_response~ preference_3_level -1, issues = issues, data = d)
 
@@ -361,11 +360,14 @@ plot_grid(beliefs,prefs,ncol=2,rel_widths  = c(1,1))
 ggsave("../Figs/fig_updating_by_prior.png",unit = "in",width=7.5, height=6)
 dev.off()
 
-quit() # quit here - reproduced figure 4
+# quit() # quit here - reproduced figure 4
+
 
 
 ### DESCRIPTIVES BY POLICIES
-## fig_bias ####
+
+## fig_bias #### (should be figure A4; HD: cannot reproduce)
+
 results <- df %>%
   select(bias_num,party_bin,issue)%>%
   filter(!is.na(issue)&!is.na(bias_num)&!is.na(party_bin))%>%
@@ -392,11 +394,12 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   scale_y_continuous(labels = percent) +
   scale_x_discrete(labels = c("Experts on\nNeedle Exchange","Scientists on\nGMO Ban","Economists on\nRent Control"))+
   theme(legend.position = "right") + 
-  theme_minimal()+
-  ggsave("Figs/fig_bias.png", unit = "in",width=7.5, height=5,dpi = 600)
+  theme_minimal()
+
+ggsave("../Figs/fig_bias.png", unit = "in",width=7.5, height=5,dpi = 600)
 
 
-## fig_deference ####
+## fig_deference #### comment HD: figure A5 in paper
 results <- df %>%
   select(deference_num,party_bin,issue)%>%
   filter(!is.na(issue)&!is.na(deference_num)&!is.na(party_bin))%>%
@@ -408,7 +411,6 @@ results <- df %>%
             n       = sum(!is.na(deference_num)))
 
 results$se = results$sd/sqrt(results$n)
-
 results$ci = results$se*1.96
 limits <- aes(ymax = results$mean + results$ci, ymin=results$mean - results$ci)
 
@@ -424,11 +426,12 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   scale_y_continuous(labels = percent) +
   scale_x_discrete(labels = c("Experts on\nNeedle Exchange","Scientists on\nGMO Ban","Economists on\nRent Control"))+
   theme(legend.position = "right") + 
-  theme_minimal()+
-  ggsave("Figs/fig_deference.png", unit = "in",width=7.5, height=5,dpi = 600)
+  theme_minimal()
+
+ggsave("../Figs/fig_deference.png", unit = "in",width=7.5, height=5,dpi = 600)
 
 
-### fig_polarity ####
+### fig_polarity #### Figure A3 in paper
 results <- df %>%
   select(polarization,party_bin,issue)%>%
   filter(!is.na(issue)&!is.na(polarization)&!is.na(party_bin))%>%
@@ -454,15 +457,18 @@ ggplot(data=results, aes(fill= party_bin, y=mean, x=issue)) +
   ylab("")+
   theme_minimal()+
   #ggtitle("Relative Likelihood that Republican\n(vs. Democratic) Party Supports Policy")+
-  scale_y_continuous(labels = percent)+ ggsave("Figs/fig_polarity.png", unit = "in",width=7.5, height=5)
+  scale_y_continuous(labels = percent)
+
+ggsave("../Figs/fig_polarity.png", unit = "in",width=7.5, height=5)
 
 
 
 ###ALTERNATIVE VISUALIZATION OF MAIN FIGURES
+
 ##### fig_levels#######
 policy <- "Needle Exchange"
-beliefs_NEP <- df%>%
-  # df %>% 
+
+beliefs_NEP <- df %>%
   filter(survey=="CP18"&issue == policy&policymaker==1&!is.na(accuracy)&!is.na(party_bin)) %>%
   select(treated,accuracy)%>%
   mutate(condition = factor(ifelse(treated == 1,"With expert evidence",
